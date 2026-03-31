@@ -7,6 +7,9 @@ const MEMBER_COUNT_CHANNEL_ID = '1485109675904208997';
 const SENIOR_LEADERSHIP_ROLE = '1487164396630183973';
 const JUNIOR_LEADERSHIP_ROLE = '1486161292816421016';
 const LOG_CHANNEL_ID = '1485347671425286275';
+const TRAINING_REQ_CHANNEL = '1488353354198548610';
+const TRAINEE_ROLE = '1480910696056094813';
+const TRAINING_OFFICERS_ROLE = '1486225236562280459';
 
 const WELCOME_CHANNEL_ID = '1480025451765436510';
 const GENERAL_CHANNEL_ID = '1478745388172181637';
@@ -56,7 +59,8 @@ client.once('ready', async () => {
     new SlashCommandBuilder().setName('kick').setDescription('Kick user')
       .addUserOption(option => option.setName('user').setDescription('User to kick').setRequired(true))
       .addStringOption(option => option.setName('reason').setDescription('Kick reason'))
-      .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers)
+      .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
+    new SlashCommandBuilder().setName('requesttraining').setDescription('Request training session')
   ].map(command => command.toJSON());
 
   const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
@@ -144,12 +148,54 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({ embeds: [embed] });
     return;
   }
+
+  if (commandName === 'requesttraining') {
+    if (interaction.channel.id !== TRAINING_REQ_CHANNEL) {
+      return interaction.reply({ content: 'This command can only be used in <#' + TRAINING_REQ_CHANNEL + '>', ephemeral: true });
+    }
+    if (!interaction.member.roles.cache.has(TRAINEE_ROLE)) {
+      return interaction.reply({ content: 'You need the Trainee role to use this command!', ephemeral: true });
+    }
+
+    const desc = `# <:USSS:1483911088696459284> __USSS・Training Request__\\nA new training has been requested by ${interaction.user.toString()}!\\n> - All Training Officers are requested to host a session in=game, and publicizing an update in <#1481028950980431994>. \\n> - Trainees must wait for a training to be hosted. If no training has been hosted within 1 week or 168 hours, please report this in <#1480398372027502652>, and the Training Command will be disciplined accordingly. \\n> - Please briefly review <#1488355130918305862> to enhance your knowledge for the procedures applicable to the Secret Service. `;
+    const embed = new EmbedBuilder().setDescription(desc).setColor(3618615);
+    
+    await interaction.deleteReply().catch(() => {});
+    await interaction.channel.send({ 
+      embeds: [embed], 
+      content: `<@&${TRAINING_OFFICERS_ROLE}>`,
+      username: 'USSS・Training Request',
+      avatarURL: 'https://cdn.discordapp.com/attachments/1485045973699792916/1488242126239039498/usss_2.png?ex=69cc10fd&is=69cabf7d&hm=f7da0161fc85a427ddf20d055f4a5f71f86cee469d8402560f5e2d3ce876e346&'
+    });
+    return;
+  }
 });
 
 client.on('messageCreate', async message => {
   if (message.author.bot || message.channel.type !== 0) return;
 
   // Handle prefix commands
+  if (message.content === '!requesttraining') {
+    if (message.channel.id !== TRAINING_REQ_CHANNEL) {
+      return message.reply('This command can only be used in <#' + TRAINING_REQ_CHANNEL + '>').then(m => setTimeout(() => m.delete().catch(() => {}), 5000));
+    }
+    if (!message.member.roles.cache.has(TRAINEE_ROLE)) {
+      return message.reply('You need the Trainee role to use this command!').then(m => setTimeout(() => m.delete().catch(() => {}), 5000));
+    }
+
+    const desc = `# <:USSS:1483911088696459284> __USSS・Training Request__\\nA new training has been requested by ${message.author.toString()}!\\n> - All Training Officers are requested to host a session in=game, and publicizing an update in <#1481028950980431994>. \\n> - Trainees must wait for a training to be hosted. If no training has been hosted within 1 week or 168 hours, please report this in <#1480398372027502652>, and the Training Command will be disciplined accordingly. \\n> - Please briefly review <#1488355130918305862> to enhance your knowledge for the procedures applicable to the Secret Service. `;
+    const embed = new EmbedBuilder().setDescription(desc).setColor(3618615);
+    
+    await message.delete();
+    await message.channel.send({ 
+      embeds: [embed], 
+      content: `<@&${TRAINING_OFFICERS_ROLE}>`,
+      username: 'USSS・Training Request',
+      avatarURL: 'https://cdn.discordapp.com/attachments/1485045973699792916/1488242126239039498/usss_2.png?ex=69cc10fd&is=69cabf7d&hm=f7da0161fc85a427ddf20d055f4a5f71f86cee469d8402560f5e2d3ce876e346&'
+    });
+    return;
+  }
+
   if (message.content.startsWith('!say')) {
     const args = message.content.slice(4).trim();
     if (!args) return message.reply('Please provide a message to say.');
