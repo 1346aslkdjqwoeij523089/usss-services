@@ -22,14 +22,11 @@ const BANNER_URL = 'https://cdn.discordapp.com/attachments/1485138081777713183/1
 const FOOTER_URL = 'https://cdn.discordapp.com/attachments/1485138081777713183/1485139190978183248/usssfooter.png?ex=69c0c727&is=69bf75a7&hm=58b2261214a4c8f4c7396cff36a316f88efe69e0a71eae5d9a0819f421444f15&';
 const WELCOME_COLOR = 0x3322BB;
 
-let welcomeWebhook = null;
-const data = new Map();
 
-function getOrdinal(n) {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
-}
+const data = new Map();
+const timers = new Map(); // guildId -> {stopTimeout: timeoutId, idleTimeout: timeoutId, lastActivity: timestamp, commandChannel: channelId}
+
+function getOrdinal(n) {\n  const s = ['th', 'st', 'nd', 'rd'];\n  const v = n % 100;\n  return n + (s[(v - 20) % 10] || s[v] || s[0]);\n}\n\nfunction parseDuration(str) {\n  const num = parseInt(str);\n  if (isNaN(num)) return null;\n  const unit = str.slice(-1).toLowerCase();\n  if (unit === 's') return num * 1000;\n  if (unit === 'm') return num * 60 * 1000;\n  if (unit === 'h' || unit === 'hr') return num * 60 * 60 * 1000;\n  return null;\n}\n\nfunction clearGuildTimer(guildId) {\n  const timer = timers.get(guildId);\n  if (timer) {\n    if (timer.stopTimeout) clearTimeout(timer.stopTimeout);\n    if (timer.idleTimeout) clearTimeout(timer.idleTimeout);\n    timers.delete(guildId);\n  }\n}\n\nfunction fillRecommended(queue) {\n  const lastTrack = queue.history.tracks.first();\n  if (!lastTrack) return;\n  const query = `recommended ${lastTrack.author} songs`;\n  player.search(query).then(result => {\n    if (result.hasTracks) {\n      queue.addTrack(result.tracks[0]);\n      queue.node.skip();\n    }\n  });\n}\n
 
 const client = new Client({ 
   intents: [
@@ -102,10 +99,7 @@ client.once('ready', async () => {
       // discord-player handles next
     });
 
-    player.events.on('empty', (queue) => {
-      queue.metadata.channel?.send('Queue empty, leaving VC...');
-      setTimeout(() => queue.delete(), 5000);
-    });
+player.events.on('empty', (queue) => {\n      const guildId = queue.guild.id;\n      const timerData = timers.get(guildId);\n      if (timerData) {\n        const channel = client.channels.cache.get(timerData.commandChannel);\n        channel?.send('Music session ended due to inactivity after 15 minutes.');\n      }\n      clearGuildTimer(guildId);\n      setTimeout(() => {\n        const conn = getVoiceConnection(guildId);\n        if (conn) conn.destroy();\n      }, 5000);\n    });
 
     player.events.on('error', (queue, error) => {
       console.error('Player error:', error);
@@ -289,63 +283,15 @@ client.on('messageCreate', async message => {
     const args = message.content.slice(prefix.length).trim().split(/\\s+/);
     const cmd = args.shift().toLowerCase();
 
-    const queue = player.nodes.get(message.guild.id);
+const queue = player.nodes.get(message.guild.id);
 
-    const checkVC = () => {
-      const vc = message.member.voice.channel;
-      if (!vc) {
-        message.reply('Please join a voice channel first!');
-        return false;
-      }
-      if (queue && queue.channel && queue.channel.id !== vc.id) {
-        message.reply("I'm already playing in another voice channel! Switch or stop there first.");
+    const checkVC = () => {\n      const vc = message.member.voice.channel;\n      if (!vc) {\n        message.reply('Please join a voice channel first!');\n        return false;\n      }\n      if (queue && queue.channel && queue.channel.id !== vc.id) {\n        message.reply("I'm already playing in another voice channel! Switch or stop there first.");\n\n        return false;\n      }\n      return vc;\n    };
 
-        return false;
-      }
-      return vc;
-    };
+    // Update last activity for idle timer\n    const guildId = message.guild.id;\n    let timerData = timers.get(guildId);\n    if (!timerData) {\n      timerData = { lastActivity: Date.now() };\n      timers.set(guildId, timerData);\n    } else {\n      timerData.lastActivity = Date.now();\n    }
 
-    if (['play', 'p'].includes(cmd)) {
-      const query = args.join(' ');
-      if (!query) return message.reply('Please provide a song name or URL!');
-      const vc = message.member.voice.channel;
-      if (!vc) return message.reply('Please join a voice channel first!');
-      if (queue && queue.channel && queue.channel.id !== vc.id) return message.reply("I'm already playing in another voice channel!");
+    if (['play', 'p'].includes(cmd)) {\n      const query = args.join(' ');\n      if (!query) return message.reply('Please provide a song name or URL!');\n      let vc = message.member.voice.channel;\n      if (!vc) return message.reply('Please join a voice channel first!');\n      if (queue && queue.channel && queue.channel.id !== vc.id) return message.reply("I'm already playing in another voice channel!");\n\n      try {\n        const result = await player.search(query, {\n          requestedBy: message.author\n        });\n        if (!result.hasTracks) return message.reply('No tracks found!');\n\n        await player.play(vc, result, {\n          nodeOptions: {\n            metadata: {\n              channel: message.channel\n            },\n            leaveOnEnd: false,\n            leaveOnEmpty: false,\n            leaveOnFinish: false,\n            volume: 50,\n            selfDeaf: true\n          }\n        });\n        message.reply(`✅ Added ${result.playlist ? result.tracks.length : 1} track(s)`);\n      } catch (e) {\n        message.reply('Failed to play.');\n        console.error(e);\n      }\n      return;\n    }\n\n    if (['join', 'j'].includes(cmd)) {\n      const vc = checkVC();\n      if (vc) {\n        joinVoiceChannel({\n          channelId: vc.id,\n          guildId: message.guild.id,\n          adapterCreator: message.guild.voiceAdapterCreator\n        });\n        message.reply('🔌 Joined VC');\n      }\n      return;\n    }\n\n    if (!queue) {\n      return message.reply('Nothing is playing! Use !play first.');\n    }
 
-      try {
-        const result = await player.search(query, {
-          requestedBy: message.author
-        });
-        if (!result.hasTracks) return message.reply('No tracks found!');
-
-        await player.play(vc, result, {
-          nodeOptions: {
-            metadata: {
-              channel: message.channel
-            },
-            leaveOnEnd: true,
-            leaveOnEmpty: true,
-            leaveOnFinish: true,
-            volume: 50,
-            selfDeaf: true
-          }
-        });
-        message.reply(`✅ Added ${result.playlist ? result.tracks.length : 1} track(s)`);
-      } catch (e) {
-        message.reply('Failed to play.');
-        console.error(e);
-      }
-      return;
-    }
-
-    if (!queue) {
-      return message.reply('Nothing is playing! Use !play first.');
-    }
-
-    if (!checkVC()) return;
-
-    switch (cmd) {
-      case 'pause':
+    if (!checkVC()) return;\n\n    switch (cmd) {\n      case 'musictimer':\n        const durStr = args.join(' ');\n        const duration = parseDuration(durStr);\n        if (!duration) {\n          return message.reply('Invalid format! Use 10m, 10hr, 10s');\n        }\n        clearGuildTimer(guildId);\n        const stopTimer = setTimeout(() => {\n          const q = player.nodes.get(guildId);\n          if (q) {\n            q.delete();\n            q.metadata.channel?.send('⏰ Music timer ended. Session stopped.');\n          }\n        }, duration);\n        timers.set(guildId, { stopTimeout: stopTimer, lastActivity: Date.now(), commandChannel: message.channel.id });\n        message.reply(`⏰ Music timer set for ${durStr}. Will stop after timer.`);\n        break;\n      case 'pause':
         queue.node.setPaused(true);
         message.reply('⏸️ Paused');
         break;
