@@ -25,13 +25,6 @@ const WELCOME_COLOR = 0x3322BB;
 let welcomeWebhook = null;
 const data = new Map();
 
-const player = new Player(client, {
-  ytdlOptions: {
-    quality: "highestaudio",
-    highWaterMark: 1 << 25
-  }
-});
-
 function getOrdinal(n) {
   const s = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
@@ -52,6 +45,13 @@ const client = new Client({
 const app = express();
 app.get('/', (req, res) => res.send('USSS Curator Online'));
 app.listen(process.env.PORT || 3000);
+
+const player = new Player(client, {
+  ytdlOptions: {
+    quality: "highestaudio",
+    highWaterMark: 1 << 25
+  }
+});
 
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}!`);
@@ -76,7 +76,48 @@ client.once('ready', async () => {
   const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
 
   try {
-    await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });\n    console.log('Successfully registered slash commands.');\n  } catch (error) {\n    console.error(error);\n  }\n\n  // Music player setup\n  try {\n    await player.extractors.loadDefault();\n    player.events.on('playerStart', (queue, track) => {\n      const channel = queue.metadata.channel;\n      if (!channel) return;\n\n      const embed = new EmbedBuilder()\n        .setDescription(`▶️ Playing **${track.title}**`)\n        .setThumbnail(track.thumbnail ?? null)\n        .addFields({ name: 'Author', value: track.author || 'Unknown', inline: true })\n        .setFooter({ text: `Duration: ${track.duration}` })\n        .setColor(Colors.Green);\n      channel.send({ embeds: [embed] });\n    });\n\n    player.events.on('trackEnd', (queue) => {\n      // discord-player handles next\n    });\n\n    player.events.on('empty', (queue) => {\n      queue.metadata.channel?.send('Queue empty, leaving VC...');\n      setTimeout(() => queue.delete(), 5000);\n    });\n\n    player.events.on('error', (queue, error) => {\n      console.error('Player error:', error);\n      queue.metadata.channel?.send('❌ An error occurred!');\n    });\n\n    console.log('✅ Music player initialized!');\n  } catch (e) {\n    console.error('Player init error:', e);\n  }
+    await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
+    console.log('Successfully registered slash commands.');
+  } catch (error) {
+    console.error(error);
+  }
+
+  // Music player setup
+  try {
+    await player.extractors.loadDefault();
+    player.events.on('playerStart', (queue, track) => {
+      const channel = queue.metadata.channel;
+      if (!channel) return;
+
+      const embed = new EmbedBuilder()
+        .setDescription(`▶️ Playing **${track.title}**`)
+        .setThumbnail(track.thumbnail ?? null)
+        .addFields({ name: 'Author', value: track.author || 'Unknown', inline: true })
+        .setFooter({ text: `Duration: ${track.duration}` })
+        .setColor(Colors.Green);
+      channel.send({ embeds: [embed] });
+    });
+
+    player.events.on('trackEnd', (queue) => {
+      // discord-player handles next
+    });
+
+    player.events.on('empty', (queue) => {
+      queue.metadata.channel?.send('Queue empty, leaving VC...');
+      setTimeout(() => queue.delete(), 5000);
+    });
+
+    player.events.on('error', (queue, error) => {
+      console.error('Player error:', error);
+      queue.metadata.channel?.send('❌ An error occurred!');
+    });
+
+    console.log('✅ Music player initialized!');
+  } catch (e) {
+    console.error('Player init error:', e);
+  }
+
+  // Setup welcome webhook
   const welcomeChannel = client.channels.cache.get(WELCOME_CHANNEL_ID);
   if (welcomeChannel) {
     const webhooks = await welcomeChannel.fetchWebhooks();
@@ -237,13 +278,173 @@ client.on('messageCreate', async message => {
       return;
     }
 
-    await message.delete();\n    await message.channel.send(args);\n    return;\n  }\n\n  // Music commands\n  const prefix = '!';\n  if (message.content.startsWith(prefix)) {\n    const args = message.content.slice(prefix.length).trim().split(/\\s+/);\n    const cmd = args.shift().toLowerCase();\n\n    const queue = useQueue(message.guild.id);\n\n    const checkVC = () => {\n      const vc = message.member.voice.channel;\n      if (!vc) {\n        message.reply('Please join a voice channel first!');\n        return false;\n      }\n      if (queue && queue.channel && queue.channel.id !== vc.id) {\n        message.reply('I\\'m already playing in another voice channel! Switch or stop there first.');\n        return false;\n      }\n      return vc;\n    };\n\n    if (['play', 'p'].includes(cmd)) {\n      const query = args.join(' ');\n      if (!query) return message.reply('Please provide a song name or URL!');\n      const vc = checkVC();\n      if (!vc) return;\n\n      try {\n        const result = await player.search(query, {\n          requestedBy: message.author\n        });\n        if (!result.hasTracks) return message.reply('No tracks found!');\n\n        const track = result.tracks[0];\n        await player.play(vc, track, {\n          nodeOptions: {\n            metadata: {\n              channel: message.channel\n            },\n            leaveOnEnd: true,\n            leaveOnEmpty: true,\n            leaveOnFinish: true,\n            volume: 50,\n            selfDeaf: true\n          }\n        });\n        message.reply(`✅ Playing **${track.title}** by **${track.author}**`);\n      } catch (e) {\n        message.reply('Failed to play the song. Check console.');\n        console.error(e);\n      }\n      return;\n    }\n\n    if (!queue) {\n      return message.reply('Nothing is playing! Use !play first.');\n    }\n\n    if (!checkVC()) return;\n\n    switch (cmd) {\n      case 'pause':\n        queue.node.setPaused(true);\n        message.reply('⏸️ Paused');\n        break;\n      case 'resume':\n        queue.node.setPaused(false);\n        message.reply('▶️ Resumed');\n        break;\n      case 'stop':\n        queue.delete();\n        message.reply('⏹️ Stopped music and cleared queue');\n        break;\n      case 'skip':\n      case 's':\n        queue.node.skip();\n        message.reply('⏭️ Skipped');\n        break;\n      case 'volume':\n      case 'v':\n        const vol = parseInt(args[0]);\n        if (isNaN(vol) || vol < 0 || vol > 100) return message.reply('Volume must be 0-100');\n        queue.node.setVolume(vol / 100);\n        message.reply(`🔊 Volume set to ${vol}%`);\n        break;\n      case 'queue':\n      case 'q':\n        if (queue.tracks.size === 0) return message.reply('Queue empty');\n        const tracks = queue.tracks.toArray().slice(0, 10).map((track, i) => `**${i+1}.** ${track.title} - ${track.author}`).join('\\n');\n        const embed = new EmbedBuilder()\n          .setTitle(`📜 Queue (${queue.tracks.size} tracks)`)\n          .setDescription(tracks + (queue.tracks.size > 10 ? `\\n...and ${queue.tracks.size - 10} more` : ''))\n          .setColor(Colors.Blue);\n        message.reply({ embeds: [embed] });\n        break;\n      case 'np':\n      case 'nowplaying':\n        if (!queue.currentTrack) return message.reply('Nothing playing');\n        const curr = queue.currentTrack;\n        message.reply(`🎵 **${curr.title}** by **${curr.author}** (${curr.duration})`);\n        break;\n      case 'leave':\n      case 'dc':\n      case 'disconnect':\n        queue.delete();\n        const connection = getVoiceConnection(message.guild.id);\n        if (connection) connection.destroy();\n        message.reply('👋 Left VC');\n        break;\n      case 'join':\n      case 'j':\n        const joinVc = checkVC();\n        if (joinVc) {\n          joinVoiceChannel({\n            channelId: joinVc.id,\n            guildId: message.guild.id,\n            adapterCreator: message.guild.voiceAdapterCreator\n          });\n          message.reply('🔌 Joined VC');\n        }\n        break;\n      default:\n        break;\n    }\n  }\n\n  // Direct bot mention response (only direct mention, not @everyone or roles)\n  if (message.mentions.users.has(client.user.id) && \n      !message.mentions.everyone && \n      !message.mentions.roles.size &&\n      message.channel.type === 0 &&\n      !message.reference) {
+    await message.delete();
+    await message.channel.send(args);
+    return;
+  }
+
+  // Music commands
+  const prefix = '!';
+  if (message.content.startsWith(prefix)) {
+    const args = message.content.slice(prefix.length).trim().split(/\\s+/);
+    const cmd = args.shift().toLowerCase();
+
+    const queue = useQueue(message.guild.id);
+
+    const checkVC = () => {
+      const vc = message.member.voice.channel;
+      if (!vc) {
+        message.reply('Please join a voice channel first!');
+        return false;
+      }
+      if (queue && queue.channel && queue.channel.id !== vc.id) {
+        message.reply('I\\'m already playing in another voice channel! Switch or stop there first.');
+        return false;
+      }
+      return vc;
+    };
+
+    if (['play', 'p'].includes(cmd)) {
+      const query = args.join(' ');
+      if (!query) return message.reply('Please provide a song name or URL!');
+      const vc = checkVC();
+      if (!vc) return;
+
+      try {
+        const result = await player.search(query, {
+          requestedBy: message.author
+        });
+        if (!result.hasTracks) return message.reply('No tracks found!');
+
+        const track = result.tracks[0];
+        await player.play(vc, track, {
+          nodeOptions: {
+            metadata: {
+              channel: message.channel
+            },
+            leaveOnEnd: true,
+            leaveOnEmpty: true,
+            leaveOnFinish: true,
+            volume: 50,
+            selfDeaf: true
+          }
+        });
+        message.reply(`✅ Playing **${track.title}** by **${track.author}**`);
+      } catch (e) {
+        message.reply('Failed to play the song. Check console.');
+        console.error(e);
+      }
+      return;
+    }
+
+    if (!queue) {
+      return message.reply('Nothing is playing! Use !play first.');
+    }
+
+    if (!checkVC()) return;
+
+    switch (cmd) {
+      case 'pause':
+        queue.node.setPaused(true);
+        message.reply('⏸️ Paused');
+        break;
+      case 'resume':
+        queue.node.setPaused(false);
+        message.reply('▶️ Resumed');
+        break;
+      case 'stop':
+        queue.delete();
+        message.reply('⏹️ Stopped music and cleared queue');
+        break;
+      case 'skip':
+      case 's':
+        queue.node.skip();
+        message.reply('⏭️ Skipped');
+        break;
+      case 'volume':
+      case 'v':
+        const vol = parseInt(args[0]);
+        if (isNaN(vol) || vol < 0 || vol > 100) return message.reply('Volume must be 0-100');
+        queue.node.setVolume(vol / 100);
+        message.reply(`🔊 Volume set to ${vol}%`);
+        break;
+      case 'queue':
+      case 'q':
+        if (queue.tracks.size === 0) return message.reply('Queue empty');
+        const tracks = queue.tracks.toArray().slice(0, 10).map((track, i) => `**${i+1}.** ${track.title} - ${track.author}`).join('\\n');
+        const embed = new EmbedBuilder()
+          .setTitle(`📜 Queue (${queue.tracks.size} tracks)`)
+          .setDescription(tracks + (queue.tracks.size > 10 ? `\\n...and ${queue.tracks.size - 10} more` : ''))
+          .setColor(Colors.Blue);
+        message.reply({ embeds: [embed] });
+        break;
+      case 'np':
+      case 'nowplaying':
+        if (!queue.currentTrack) return message.reply('Nothing playing');
+        const curr = queue.currentTrack;
+        message.reply(`🎵 **${curr.title}** by **${curr.author}** (${curr.duration})`);
+        break;
+      case 'leave':
+      case 'dc':
+      case 'disconnect':
+        queue.delete();
+        const connection = getVoiceConnection(message.guild.id);
+        if (connection) connection.destroy();
+        message.reply('👋 Left VC');
+        break;
+      case 'join':
+      case 'j':
+        const joinVc = checkVC();
+        if (joinVc) {
+          joinVoiceChannel({
+            channelId: joinVc.id,
+            guildId: message.guild.id,
+            adapterCreator: message.guild.voiceAdapterCreator
+          });
+          message.reply('🔌 Joined VC');
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  // Shut up response for shut up/shutup (case insensitive)
+  if (message.content.toLowerCase().match(/\\b(shut ?up|shutup)\\b/)) {
+    return message.reply('https://i.pinimg.com/474x/ef/7c/80/ef7c800df3e2e4043fae201843b62c9a.jpg');
+  }
+
+  // Direct bot mention response (only direct mention, not @everyone or roles)
+  if (message.mentions.users.has(client.user.id) && 
+      !message.mentions.everyone && 
+      !message.mentions.roles.size &&
+      message.channel.type === 0 &&
+      !message.reference) {
     const response = `Greetings, I am <@${client.user.id}>. My prefix is \`!\` and slash commands. If you have any questions about the operations of this bot, please make a ticket. Have a good day!`;
     const sent = await message.channel.send(response);
     setTimeout(() => sent.delete().catch(() => {}), 10000);
   }
 
-  // Message sent logging\n  if (!message.author.bot && message.channel.id !== LOG_CHANNEL_ID) {\n    const logChannel = client.channels.cache.get(LOG_CHANNEL_ID);\n    if (logChannel && message.channel.id !== LOG_CHANNEL_ID) {\n      const timestamp = `<t:${Math.floor(Date.now() / 1000)}:R>`;\n      const embed = new EmbedBuilder()\n        .setTitle('__Message Logistic__')\n        .addFields(\n          { name: '`From:`', value: `<@${message.author.id}>`, inline: true },\n          { name: '`Their User-ID:`', value: message.author.id, inline: true },\n          { name: '`Message Sent:`', value: message.content || '*No text content*', inline: false },\n          { name: '`Message Timing:`', value: timestamp, inline: true },\n          { name: '`Message ID:`', value: message.id, inline: true },\n          { name: '`Channel Location:`', value: `<#${message.channel.id}>`, inline: true }\n        )\n        .setColor(0x0f9949);\n      await logChannel.send({ embeds: [embed] });\n    }\n  }\n});
+  // Message sent logging 
+  if (!message.author.bot && message.channel.id !== LOG_CHANNEL_ID) {
+    const logChannel = client.channels.cache.get(LOG_CHANNEL_ID);
+    if (logChannel && message.channel.id !== LOG_CHANNEL_ID) {
+      const timestamp = `<t:${Math.floor(Date.now() / 1000)}:R>`;
+      const embed = new EmbedBuilder()
+        .setTitle('__Message Logistic__')
+        .addFields(
+          { name: '`From:`', value: `<@${message.author.id}>`, inline: true },
+          { name: '`Their User-ID:`', value: message.author.id, inline: true },
+          { name: '`Message Sent:`', value: message.content || '*No text content*', inline: false },
+          { name: '`Message Timing:`', value: timestamp, inline: true },
+          { name: '`Message ID:`', value: message.id, inline: true },
+          { name: '`Channel Location:`', value: `<#${message.channel.id}>`, inline: true }
+        )
+        .setColor(0x0f9949);
+      await logChannel.send({ embeds: [embed] });
+    }
+  }
+});
 
 // Message logging helper
 async function logMessage(type, message, oldContent = null) {
@@ -286,9 +487,16 @@ async function logMessage(type, message, oldContent = null) {
   await logChannel.send({ embeds: [embed] });
 }
 
-client.on('messageUpdate', async (oldMessage, newMessage) => {\n  if (oldMessage.author?.bot || newMessage.channel.id === LOG_CHANNEL_ID || oldMessage.content === newMessage.content) return;\n  if (newMessage.channel.id === LOG_CHANNEL_ID) return;\n  await logMessage('edit', newMessage, oldMessage.content);\n});
+client.on('messageUpdate', async (oldMessage, newMessage) => {
+  if (oldMessage.author?.bot || newMessage.channel.id === LOG_CHANNEL_ID || oldMessage.content === newMessage.content) return;
+  if (newMessage.channel.id === LOG_CHANNEL_ID) return;
+  await logMessage('edit', newMessage, oldMessage.content);
+});
 
-client.on('messageDelete', async (message) => {\n  if (message.author?.bot || message.channel.id === LOG_CHANNEL_ID) return;\n  await logMessage('delete', message);\n});
+client.on('messageDelete', async (message) => {
+  if (message.author?.bot || message.channel.id === LOG_CHANNEL_ID) return;
+  await logMessage('delete', message);
+});
 
 client.on('guildMemberAdd', async member => {
   if (member.guild.id !== GUILD_ID) return;
@@ -336,4 +544,3 @@ client.on('guildMemberAdd', async member => {
 });
 
 client.login(process.env.BOT_TOKEN);
-
