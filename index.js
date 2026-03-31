@@ -243,26 +243,7 @@ client.on('messageCreate', async message => {
     setTimeout(() => sent.delete().catch(() => {}), 10000);
   }
 
-  // Message sent logging
-  if (!message.author.bot && message.channel.id !== LOG_CHANNEL_ID) {
-    const logChannel = client.channels.cache.get(LOG_CHANNEL_ID);
-    if (logChannel) {
-      const timestamp = `<t:${Math.floor(Date.now() / 1000)}:R>`;
-      const embed = new EmbedBuilder()
-        .setTitle('__Message Logistic__')
-        .addFields(
-          { name: '`From:`', value: `<@${message.author.id}>`, inline: true },
-          { name: '`Their User-ID:`', value: message.author.id, inline: true },
-          { name: '`Message Sent:`', value: message.content || '*No text content*', inline: false },
-          { name: '`Message Timing:`', value: timestamp, inline: true },
-          { name: '`Message ID:`', value: message.id, inline: true },
-          { name: '`Channel Location:`', value: `<#${message.channel.id}>`, inline: true }
-        )
-        .setColor(0x0f9949);
-      await logChannel.send({ embeds: [embed] });
-    }
-  }
-});
+  // Message sent logging\n  if (!message.author.bot && message.channel.id !== LOG_CHANNEL_ID) {\n    const logChannel = client.channels.cache.get(LOG_CHANNEL_ID);\n    if (logChannel && message.channel.id !== LOG_CHANNEL_ID) {\n      const timestamp = `<t:${Math.floor(Date.now() / 1000)}:R>`;\n      const embed = new EmbedBuilder()\n        .setTitle('__Message Logistic__')\n        .addFields(\n          { name: '`From:`', value: `<@${message.author.id}>`, inline: true },\n          { name: '`Their User-ID:`', value: message.author.id, inline: true },\n          { name: '`Message Sent:`', value: message.content || '*No text content*', inline: false },\n          { name: '`Message Timing:`', value: timestamp, inline: true },\n          { name: '`Message ID:`', value: message.id, inline: true },\n          { name: '`Channel Location:`', value: `<#${message.channel.id}>`, inline: true }\n        )\n        .setColor(0x0f9949);\n      await logChannel.send({ embeds: [embed] });\n    }\n  }\n});
 
 // Message logging helper
 async function logMessage(type, message, oldContent = null) {
@@ -305,15 +286,9 @@ async function logMessage(type, message, oldContent = null) {
   await logChannel.send({ embeds: [embed] });
 }
 
-client.on('messageUpdate', async (oldMessage, newMessage) => {
-  if (oldMessage.author?.bot || newMessage.channel.id === LOG_CHANNEL_ID || oldMessage.content === newMessage.content) return;
-  await logMessage('edit', newMessage, oldMessage.content);
-});
+client.on('messageUpdate', async (oldMessage, newMessage) => {\n  if (oldMessage.author?.bot || newMessage.channel.id === LOG_CHANNEL_ID || oldMessage.content === newMessage.content) return;\n  if (newMessage.channel.id === LOG_CHANNEL_ID) return;\n  await logMessage('edit', newMessage, oldMessage.content);\n});
 
-client.on('messageDelete', async (message) => {
-  if (message.author?.bot || message.channel.id === LOG_CHANNEL_ID) return;
-  await logMessage('delete', message);
-});
+client.on('messageDelete', async (message) => {\n  if (message.author?.bot || message.channel.id === LOG_CHANNEL_ID) return;\n  await logMessage('delete', message);\n});
 
 client.on('guildMemberAdd', async member => {
   if (member.guild.id !== GUILD_ID) return;
