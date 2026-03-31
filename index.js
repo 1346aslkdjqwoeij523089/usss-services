@@ -299,6 +299,7 @@ client.on('messageCreate', async message => {
       }
       if (queue && queue.channel && queue.channel.id !== vc.id) {
         message.reply("I'm already playing in another voice channel! Switch or stop there first.");
+
         return false;
       }
       return vc;
