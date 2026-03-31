@@ -6,6 +6,7 @@ const BOT_ID = '1485123070921277530';
 const MEMBER_COUNT_CHANNEL_ID = '1485109675904208997';
 const SENIOR_LEADERSHIP_ROLE = '1487164396630183973';
 const JUNIOR_LEADERSHIP_ROLE = '1486161292816421016';
+const LOG_CHANNEL_ID = '1488349623260286986';
 
 const WELCOME_CHANNEL_ID = '1480025451765436510';
 const GENERAL_CHANNEL_ID = '1478745388172181637';
@@ -182,6 +183,77 @@ client.on('messageCreate', async message => {
     const sent = await message.channel.send(response);
     setTimeout(() => sent.delete().catch(() => {}), 10000);
   }
+
+  // Message sent logging
+  if (!message.author.bot && message.channel.id !== LOG_CHANNEL_ID) {
+    const logChannel = client.channels.cache.get(LOG_CHANNEL_ID);
+    if (logChannel) {
+      const timestamp = `<t:${Math.floor(Date.now() / 1000)}:R>`;
+      const embed = new EmbedBuilder()
+        .setTitle('__Message Logistic__')
+        .addFields(
+          { name: '`From:`', value: `<@${message.author.id}>`, inline: true },
+          { name: '`Their User-ID:`', value: message.author.id, inline: true },
+          { name: '`Message Sent:`', value: message.content || '*No text content*', inline: false },
+          { name: '`Message Timing:`', value: timestamp, inline: true },
+          { name: '`Message ID:`', value: message.id, inline: true },
+          { name: '`Channel Location:`', value: `<#${message.channel.id}>`, inline: true }
+        )
+        .setColor(0x0f9949);
+      await logChannel.send({ embeds: [embed] });
+    }
+  }
+});
+
+// Message logging helper
+async function logMessage(type, message, oldContent = null) {
+  const logChannel = client.channels.cache.get(LOG_CHANNEL_ID);
+  if (!logChannel) return;
+
+  const timestamp = `<t:${Math.floor(Date.now() / 1000)}:R>`;
+  let embed = new EmbedBuilder().setTitle('# __Message Logistic__');
+
+  if (type === 'sent') {
+    embed.addFields(
+      { name: '`From:`', value: `<@${message.author.id}>`, inline: true },
+      { name: '`Their User-ID:`', value: message.author.id, inline: true },
+      { name: '`Message Sent:`', value: message.content || '*No text content*', inline: false },
+      { name: '`Message Timing:`', value: timestamp, inline: true },
+      { name: '`Message ID:`', value: message.id, inline: true },
+      { name: '`Channel Location:`', value: `<#${message.channel.id}>`, inline: true }
+    ).setColor(0x0f9949);
+  } else if (type === 'edit') {
+    embed.addFields(
+      { name: '`From:`', value: `<@${message.author.id}>`, inline: true },
+      { name: '`Their User-ID:`', value: message.author.id, inline: true },
+      { name: '`Previous Message:`', value: oldContent || '*No previous content*', inline: false },
+      { name: '`Edited Message:`', value: message.content || '*No new content*', inline: false },
+      { name: '`Message Timing:`', value: timestamp, inline: true },
+      { name: '`Message ID:`', value: message.id, inline: true },
+      { name: '`Channel Location:`', value: `<#${message.channel.id}>`, inline: true }
+    ).setColor(0xd2b723);
+  } else if (type === 'delete') {
+    embed.addFields(
+      { name: '`From:`', value: `<@${message.author.id}>`, inline: true },
+      { name: '`Their User-ID:`', value: message.author.id, inline: true },
+      { name: '`Message Sent:`', value: message.content || '*No text content*', inline: false },
+      { name: '`Message Timing:`', value: timestamp, inline: true },
+      { name: '`Message ID:`', value: message.id, inline: true },
+      { name: '`Channel Location:`', value: `<#${message.channel.id}>`, inline: true }
+    ).setColor(0xd23e3e);
+  }
+
+  await logChannel.send({ embeds: [embed] });
+}
+
+client.on('messageUpdate', async (oldMessage, newMessage) => {
+  if (oldMessage.author?.bot || newMessage.channel.id === LOG_CHANNEL_ID || oldMessage.content === newMessage.content) return;
+  await logMessage('edit', newMessage, oldMessage.content);
+});
+
+client.on('messageDelete', async (message) => {
+  if (message.author?.bot || message.channel.id === LOG_CHANNEL_ID) return;
+  await logMessage('delete', message);
 });
 
 client.on('guildMemberAdd', async member => {
