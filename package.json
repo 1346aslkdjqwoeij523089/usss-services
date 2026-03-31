@@ -11,6 +11,11 @@
   },
   "dependencies": {
     "discord.js": "^14.16.3",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "@discordjs/voice": "^0.17.0",
+    "discord-player": "^6.7.2",
+    "@discordjs/opus": "^0.10.0",
+    "sodium-native": "^4.1.2",
+    "ffmpeg-static": "^5.2.0"
   }
 }
