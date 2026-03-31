@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: usss-curator
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+    autoDeploy: false
+    env:
+      PORT: "10000"
+    cronJobs:
+      - name: ping
+        schedule: "* */5 * * * *"
+        command: curl -f http://localhost:10000/ || false
+
