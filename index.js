@@ -143,7 +143,7 @@ client.once('ready', async () => {
   };
 
   await updateMemberCount();
-  setInterval(updateMemberCount, 5 * 60 * 1000); // Every 5 minutes
+  setInterval(updateMemberCount, 5 * 60 * 1000);
 });
 
 client.on('interactionCreate', async interaction => {
@@ -211,7 +211,7 @@ client.on('interactionCreate', async interaction => {
       .setColor(3618615)
       .addFields({
         name: 'ㅤ',
-        value: `A new training has been requested by ${interaction.user.toString()}!\n> - All Training Officers are requested to host a session in=game, and publicizing an update in <#1481028950980431994>. \n> - Trainees must wait for a training to be hosted. If no training has been hosted within 1 week or 168 hours, please report this in <#1480398372027502652>, and the Training Command will be disciplined accordingly. \n> - Please briefly review <#1488355130918305862> to enhance your knowledge for the procedures applicable to the Secret Service. `,
+        value: `A new training has been requested by ${interaction.user.toString()}!\n> - All Training Officers are requested to host a session in-game, and publicizing an update in <#1481028950980431994>. \n> - Trainees must wait for a training to be hosted. If no training has been hosted within 1 week or 168 hours, please report this in <#1480398372027502652>, and the Training Command will be disciplined accordingly. \n> - Please briefly review <#1488355130918305862> to enhance your knowledge for the procedures applicable to the Secret Service. `,
         inline: false
       });
 
@@ -246,7 +246,7 @@ client.on('messageCreate', async message => {
       .setColor(3618615)
       .addFields({
         name: 'ㅤ',
-        value: `A new training has been requested by ${message.author.toString()}!\n> - All Training Officers are requested to host a session in=game, and publicizing an update in <#1481028950980431994>. \n> - Trainees must wait for a training to be hosted. If no training has been hosted within 1 week or 168 hours, please report this in <#1480398372027502652>, and the Training Command will be disciplined accordingly. \n> - Please briefly review <#1488355130918305862> to enhance your knowledge for the procedures applicable to the Secret Service. `,
+        value: `A new training has been requested by ${message.author.toString()}!\n> - All Training Officers are requested to host a session in-game, and publicizing an update in <#1481028950980431994>. \n> - Trainees must wait for a training to be hosted. If no training has been hosted within 1 week or 168 hours, please report this in <#1480398372027502652>, and the Training Command will be disciplined accordingly. \n> - Please briefly review <#1488355130918305862> to enhance your knowledge for the procedures applicable to the Secret Service. `,
         inline: false
       });
 
@@ -298,7 +298,7 @@ client.on('messageCreate', async message => {
         return false;
       }
       if (queue && queue.channel && queue.channel.id !== vc.id) {
-        message.reply('I\\'m already playing in another voice channel! Switch or stop there first.');
+        message.reply("I'm already playing in another voice channel! Switch or stop there first.");
         return false;
       }
       return vc;
@@ -409,8 +409,8 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // Shut up response for shut up/shutup (case insensitive)
-  if (message.content.toLowerCase().match(/\\b(shut ?up|shutup)\\b/)) {
+  // Shut up response
+  if (message.content.toLowerCase().match(/\\b(shut ?up|shutup)\\b/i)) {
     return message.reply('https://i.pinimg.com/474x/ef/7c/80/ef7c800df3e2e4043fae201843b62c9a.jpg');
   }
 
