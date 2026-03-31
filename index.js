@@ -6,7 +6,7 @@ const BOT_ID = '1485123070921277530';
 const MEMBER_COUNT_CHANNEL_ID = '1485109675904208997';
 const SENIOR_LEADERSHIP_ROLE = '1487164396630183973';
 const JUNIOR_LEADERSHIP_ROLE = '1486161292816421016';
-const LOG_CHANNEL_ID = '1485347671425286275';
+const LOG_CHANNEL_ID = '1488349623260286986';
 const TRAINING_REQ_CHANNEL = '1488353354198548610';
 const RECRUIT_ROLE = '1480910696056094813';
 const TRAINING_OFFICERS_ROLE = '1486225236562280459';
@@ -89,6 +89,7 @@ client.once('ready', async () => {
     const guild = client.guilds.cache.get(GUILD_ID);
     if (!guild) return;
 
+    await guild.members.fetch();
     const humanCount = guild.members.cache.filter(member => !member.user.bot).size;
     const channel = guild.channels.cache.get(MEMBER_COUNT_CHANNEL_ID);
     if (channel?.manageable) {
