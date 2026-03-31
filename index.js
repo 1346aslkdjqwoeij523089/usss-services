@@ -1,6 +1,6 @@
 const { Client, GatewayIntentBits, SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, Colors, REST, Routes, WebhookClient } = require('discord.js');
 const { Player } = require("discord-player");
-const { useQueue } = require("discord-player");
+
 const { joinVoiceChannel, getVoiceConnection, VoiceConnectionStatus } = require('@discordjs/voice');
 const express = require('express');
 
@@ -289,7 +289,7 @@ client.on('messageCreate', async message => {
     const args = message.content.slice(prefix.length).trim().split(/\\s+/);
     const cmd = args.shift().toLowerCase();
 
-    const queue = useQueue(message.guild.id);
+    const queue = player.nodes.get(message.guild.id);
 
     const checkVC = () => {
       const vc = message.member.voice.channel;
@@ -308,8 +308,9 @@ client.on('messageCreate', async message => {
     if (['play', 'p'].includes(cmd)) {
       const query = args.join(' ');
       if (!query) return message.reply('Please provide a song name or URL!');
-      const vc = checkVC();
-      if (!vc) return;
+      const vc = message.member.voice.channel;
+      if (!vc) return message.reply('Please join a voice channel first!');
+      if (queue && queue.channel && queue.channel.id !== vc.id) return message.reply("I'm already playing in another voice channel!");
 
       try {
         const result = await player.search(query, {
@@ -317,8 +318,7 @@ client.on('messageCreate', async message => {
         });
         if (!result.hasTracks) return message.reply('No tracks found!');
 
-        const track = result.tracks[0];
-        await player.play(vc, track, {
+        await player.play(vc, result, {
           nodeOptions: {
             metadata: {
               channel: message.channel
@@ -330,9 +330,9 @@ client.on('messageCreate', async message => {
             selfDeaf: true
           }
         });
-        message.reply(`✅ Playing **${track.title}** by **${track.author}**`);
+        message.reply(`✅ Added ${result.playlist ? result.tracks.length : 1} track(s)`);
       } catch (e) {
-        message.reply('Failed to play the song. Check console.');
+        message.reply('Failed to play.');
         console.error(e);
       }
       return;
@@ -411,7 +411,7 @@ client.on('messageCreate', async message => {
   }
 
   // Shut up response
-  if (message.content.toLowerCase().match(/\\b(shut ?up|shutup)\\b/i)) {
+  if (['shut up', 'shutup'].some(p => message.content.toLowerCase().includes(p))) {
     return message.reply('https://i.pinimg.com/474x/ef/7c/80/ef7c800df3e2e4043fae201843b62c9a.jpg');
   }
 
