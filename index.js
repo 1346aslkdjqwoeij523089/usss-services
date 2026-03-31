@@ -1,4 +1,7 @@
 const { Client, GatewayIntentBits, SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, Colors, REST, Routes, WebhookClient } = require('discord.js');
+const { Player } = require("discord-player");
+const { useQueue } = require("discord-player");
+const { joinVoiceChannel, getVoiceConnection, VoiceConnectionStatus } = require('@discordjs/voice');
 const express = require('express');
 
 const GUILD_ID = '1478745386586865788';
@@ -21,6 +24,13 @@ const WELCOME_COLOR = 0x3322BB;
 
 let welcomeWebhook = null;
 const data = new Map();
+
+const player = new Player(client, {
+  ytdlOptions: {
+    quality: "highestaudio",
+    highWaterMark: 1 << 25
+  }
+});
 
 function getOrdinal(n) {
   const s = ['th', 'st', 'nd', 'rd'];
@@ -66,13 +76,7 @@ client.once('ready', async () => {
   const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
 
   try {
-    await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
-    console.log('Successfully registered slash commands.');
-  } catch (error) {
-    console.error(error);
-  }
-
-  // Setup welcome webhook
+    await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });\n    console.log('Successfully registered slash commands.');\n  } catch (error) {\n    console.error(error);\n  }\n\n  // Music player setup\n  try {\n    await player.extractors.loadDefault();\n    player.events.on('playerStart', (queue, track) => {\n      const channel = queue.metadata.channel;\n      if (!channel) return;\n\n      const embed = new EmbedBuilder()\n        .setDescription(`▶️ Playing **${track.title}**`)\n        .setThumbnail(track.thumbnail ?? null)\n        .addFields({ name: 'Author', value: track.author || 'Unknown', inline: true })\n        .setFooter({ text: `Duration: ${track.duration}` })\n        .setColor(Colors.Green);\n      channel.send({ embeds: [embed] });\n    });\n\n    player.events.on('trackEnd', (queue) => {\n      // discord-player handles next\n    });\n\n    player.events.on('empty', (queue) => {\n      queue.metadata.channel?.send('Queue empty, leaving VC...');\n      setTimeout(() => queue.delete(), 5000);\n    });\n\n    player.events.on('error', (queue, error) => {\n      console.error('Player error:', error);\n      queue.metadata.channel?.send('❌ An error occurred!');\n    });\n\n    console.log('✅ Music player initialized!');\n  } catch (e) {\n    console.error('Player init error:', e);\n  }
   const welcomeChannel = client.channels.cache.get(WELCOME_CHANNEL_ID);
   if (welcomeChannel) {
     const webhooks = await welcomeChannel.fetchWebhooks();
@@ -233,17 +237,7 @@ client.on('messageCreate', async message => {
       return;
     }
 
-    await message.delete();
-    await message.channel.send(args);
-    return;
-  }
-
-  // Direct bot mention response (only direct mention, not @everyone or roles)
-  if (message.mentions.users.has(client.user.id) && 
-      !message.mentions.everyone && 
-      !message.mentions.roles.size &&
-      message.channel.type === 0 &&
-      !message.reference) {
+    await message.delete();\n    await message.channel.send(args);\n    return;\n  }\n\n  // Music commands\n  const prefix = '!';\n  if (message.content.startsWith(prefix)) {\n    const args = message.content.slice(prefix.length).trim().split(/\\s+/);\n    const cmd = args.shift().toLowerCase();\n\n    const queue = useQueue(message.guild.id);\n\n    const checkVC = () => {\n      const vc = message.member.voice.channel;\n      if (!vc) {\n        message.reply('Please join a voice channel first!');\n        return false;\n      }\n      if (queue && queue.channel && queue.channel.id !== vc.id) {\n        message.reply('I\\'m already playing in another voice channel! Switch or stop there first.');\n        return false;\n      }\n      return vc;\n    };\n\n    if (['play', 'p'].includes(cmd)) {\n      const query = args.join(' ');\n      if (!query) return message.reply('Please provide a song name or URL!');\n      const vc = checkVC();\n      if (!vc) return;\n\n      try {\n        const result = await player.search(query, {\n          requestedBy: message.author\n        });\n        if (!result.hasTracks) return message.reply('No tracks found!');\n\n        const track = result.tracks[0];\n        await player.play(vc, track, {\n          nodeOptions: {\n            metadata: {\n              channel: message.channel\n            },\n            leaveOnEnd: true,\n            leaveOnEmpty: true,\n            leaveOnFinish: true,\n            volume: 50,\n            selfDeaf: true\n          }\n        });\n        message.reply(`✅ Playing **${track.title}** by **${track.author}**`);\n      } catch (e) {\n        message.reply('Failed to play the song. Check console.');\n        console.error(e);\n      }\n      return;\n    }\n\n    if (!queue) {\n      return message.reply('Nothing is playing! Use !play first.');\n    }\n\n    if (!checkVC()) return;\n\n    switch (cmd) {\n      case 'pause':\n        queue.node.setPaused(true);\n        message.reply('⏸️ Paused');\n        break;\n      case 'resume':\n        queue.node.setPaused(false);\n        message.reply('▶️ Resumed');\n        break;\n      case 'stop':\n        queue.delete();\n        message.reply('⏹️ Stopped music and cleared queue');\n        break;\n      case 'skip':\n      case 's':\n        queue.node.skip();\n        message.reply('⏭️ Skipped');\n        break;\n      case 'volume':\n      case 'v':\n        const vol = parseInt(args[0]);\n        if (isNaN(vol) || vol < 0 || vol > 100) return message.reply('Volume must be 0-100');\n        queue.node.setVolume(vol / 100);\n        message.reply(`🔊 Volume set to ${vol}%`);\n        break;\n      case 'queue':\n      case 'q':\n        if (queue.tracks.size === 0) return message.reply('Queue empty');\n        const tracks = queue.tracks.toArray().slice(0, 10).map((track, i) => `**${i+1}.** ${track.title} - ${track.author}`).join('\\n');\n        const embed = new EmbedBuilder()\n          .setTitle(`📜 Queue (${queue.tracks.size} tracks)`)\n          .setDescription(tracks + (queue.tracks.size > 10 ? `\\n...and ${queue.tracks.size - 10} more` : ''))\n          .setColor(Colors.Blue);\n        message.reply({ embeds: [embed] });\n        break;\n      case 'np':\n      case 'nowplaying':\n        if (!queue.currentTrack) return message.reply('Nothing playing');\n        const curr = queue.currentTrack;\n        message.reply(`🎵 **${curr.title}** by **${curr.author}** (${curr.duration})`);\n        break;\n      case 'leave':\n      case 'dc':\n      case 'disconnect':\n        queue.delete();\n        const connection = getVoiceConnection(message.guild.id);\n        if (connection) connection.destroy();\n        message.reply('👋 Left VC');\n        break;\n      case 'join':\n      case 'j':\n        const joinVc = checkVC();\n        if (joinVc) {\n          joinVoiceChannel({\n            channelId: joinVc.id,\n            guildId: message.guild.id,\n            adapterCreator: message.guild.voiceAdapterCreator\n          });\n          message.reply('🔌 Joined VC');\n        }\n        break;\n      default:\n        break;\n    }\n  }\n\n  // Direct bot mention response (only direct mention, not @everyone or roles)\n  if (message.mentions.users.has(client.user.id) && \n      !message.mentions.everyone && \n      !message.mentions.roles.size &&\n      message.channel.type === 0 &&\n      !message.reference) {
     const response = `Greetings, I am <@${client.user.id}>. My prefix is \`!\` and slash commands. If you have any questions about the operations of this bot, please make a ticket. Have a good day!`;
     const sent = await message.channel.send(response);
     setTimeout(() => sent.delete().catch(() => {}), 10000);
