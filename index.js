@@ -16,9 +16,10 @@ const TRAINING_OFFICERS_ROLE = '1486225236562280459';
 const WELCOME_CHANNEL_ID = '1480025451765436510';
 const GENERAL_CHANNEL_ID = '1478745388172181637';
 
+const ARRIVALS_AVATAR_URL = 'https://cdn.discordapp.com/attachments/1485045973699792916/1488242126239039498/usss_2.png?ex=69cd627d&is=69cc10fd&hm=3cc2acff1b76ea82509030aafdfab2dbfe908a992eff4ae3cc3c31206adc3920&';
 const AVATAR_URL = 'https://cdn.discordapp.com/attachments/1485045973699792916/1485052651392733435/image523523.png?ex=69c0768f&is=69bf250f&hm=5c7e1cfba188b46b04b8fb0c773aa14f23627eaa1bd1215c488dff2614bb6c20&';
-const BANNER_URL = 'https://cdn.discordapp.com/attachments/1485138081777713183/1485138106028920963/welusss.png?ex=69c0c625&is=69bf74a5&hm=f0e6e8beb676ae6a7d549d7d3ad595baa5e1f72c259fbea7d4733a3b7b92540c&';
-const FOOTER_URL = 'https://cdn.discordapp.com/attachments/1485138081777713183/1485139190978183248/usssfooter.png?ex=69c0c727&is=69bf75a7&hm=58b2261214a4c8f4c7396cff36a316f88efe69e0a71eae5d9a0819f421444f15&';
+const BANNER_URL = 'https://cdn.discordapp.com/attachments/1485138081777713183/1485138106028920963/welusss.png?ex=69cd4c65&is=69cbfae5&hm=d8c687b7ce2ca71cb196c73352f295461d1cdcd214519e0f3a61a437a278c659&';
+const FOOTER_URL = 'https://cdn.discordapp.com/attachments/1485138081777713183/1485139190978183248/usssfooter.png?ex=69cd4d67&is=69cbfbe7&hm=b1e35cad3d66ea73a6c4ad4c0b056a74859f3b3a7f888463a034aa46f9bc14af&';
 const WELCOME_COLOR = 0x3322BB;
 
 let welcomeWebhook = null;
@@ -166,9 +167,9 @@ client.once('ready', async () => {
   const welcomeChannel = client.channels.cache.get(WELCOME_CHANNEL_ID);
   if (welcomeChannel) {
     const webhooks = await welcomeChannel.fetchWebhooks();
-    let webhook = webhooks.find(wh => wh.name === 'USSS・Welcome');
+    let webhook = webhooks.find(wh => wh.name === 'USSS・Arrivals');
     if (!webhook) {
-      webhook = await welcomeChannel.createWebhook({ name: 'USSS・Welcome', avatar: AVATAR_URL });
+      webhook = await welcomeChannel.createWebhook({ name: 'USSS・Arrivals', avatar: ARRIVALS_AVATAR_URL });
     }
     welcomeWebhook = new WebhookClient({ id: webhook.id, token: webhook.token });
   }
@@ -468,13 +469,34 @@ client.on('guildMemberAdd', async member => {
   }, 30000);
 
   if (welcomeWebhook) {
-    const desc = `Welcome ${member}! Read rules <#1480024585280815225>, verify <#1480306233889259691>, info <#1485028060158890094>, ticket <#1480398372027502652>.`;
-    const embeds = [
-      { image: { url: BANNER_URL }, color: WELCOME_COLOR },
-      { title: 'Welcome to USSS!', description: desc, color: WELCOME_COLOR },
-      { image: { url: FOOTER_URL }, color: WELCOME_COLOR }
-    ];
-    welcomeWebhook.send({ embeds, username: 'USSS・Welcome', avatarUrl: AVATAR_URL });
+    await member.guild.members.fetch();
+    const humanCount = member.guild.members.cache.filter(m => !m.user.bot).size;
+    const ordinal = getOrdinal(humanCount);
+    welcomeWebhook.send({
+      content: member.toString(),
+      embeds: [
+        {
+          image: {
+            url: "https://cdn.discordapp.com/attachments/1485138081777713183/1485138106028920963/welusss.png?ex=69cd4c65&is=69cbfae5&hm=d8c687b7ce2ca71cb196c73352f295461d1cdcd214519e0f3a61a437a278c659&"
+          },
+          color: 15843391
+        },
+        {
+          description: `> Thank you for joining USSS, ${member.toString()}! \\n> - You are our ${humanCount}${ordinal} member!\\n\\nThe United States Secret Service is an elite federal agency tasked with the protection of national leaders and the preservation of financial security. Within Liberty County State Roleplay, USSS operates as a highly trained, professional unit focused on protective intelligence, threat mitigation, and high-risk security operations.\\n\\n> 1. You must read our server-rules listed in <#1480024585280815225>.\\n> 2. You must verify with our automation services in<#1480306233889259691>.\\n> 3. In order to learn more about our community, please evaluate our <#1485028060158890094>.\\n> 4. If you are ever in need of staff to answer any of your questions, you can create a General Inquiry ticket in <#1480398372027502652>.\\n\\nOtherwise, have a fantastic day, and we hope to see you interact with our community events, channels, and features.`,
+          title: "Welcome to United States Secret Service!",
+          color: 15843391
+        },
+        {
+          color: 15843391,
+          image: {
+            url: "https://cdn.discordapp.com/attachments/1485138081777713183/1485139190978183248/usssfooter.png?ex=69cd4d67&is=69cbfbe7&hm=b1e35cad3d66ea73a6c4ad4c0b056a74859f3b3a7f888463a034aa46f9bc14af&"
+          }
+        }
+      ],
+      components: [],
+      username: "USSS・Arrivals",
+      avatar_url: ARRIVALS_AVATAR_URL
+    });
   }
 });
 
